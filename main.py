@@ -158,18 +158,10 @@ async def on_ready():
 
             for player in game["players"]:
 
-                # I won't lie, I don't think this is vital, but this is just incase there is a unicode symbol
-                # in the username, this will catch it, it may not be required as mentioned above, but I figured better
-                # safe than sorry
+                # Since only the original hosting event from the websocket contains a player name (that of the host)
+                # I made this method to search the API with the provided userID to get their name
 
-                try:
-
-                    player_name = bytes(id_and_name_converter(player["user_id"], "name"), 'utf-8').decode(
-                        'unicode_escape')
-
-                except UnicodeDecodeError:
-
-                    player_name = id_and_name_converter(player["user_id"], "name")
+                player_name = id_and_name_converter(player["user_id"], "name")
 
                 # This was in reference to how MGO1 would accept usernames consisting of only spaces, causing the bot to
                 # freak out and mess up the markup to the user's profile on the site due to having no characters to
@@ -307,6 +299,10 @@ async def subscribe_to_game_events():
                         player_cap = response["options"]["max_players"]
                         description = response["options"]["description"].capitalize()
 
+                        # this is to address that the websocket's message doesn't properly display unicode characters
+                        # therefore we convert it to UTF-8 to get the true name of the user (NOTE: Do NOT try this on
+                        # API searches, since the API is already UTF-8 and the double conversion has adverse affects)
+
                         try:
 
                             host_name = bytes(data["data"]["host"], 'utf-8').decode('unicode_escape')
@@ -374,13 +370,7 @@ async def subscribe_to_game_events():
 
                     player_id = data["data"]["user_id"]
 
-                    try:
-
-                        player_name = bytes(id_and_name_converter(player_id, "name"), 'utf-8').decode('unicode_escape')
-
-                    except UnicodeDecodeError:
-
-                        player_name = id_and_name_converter(player_id, "name")
+                    player_name = id_and_name_converter(player_id, "name")
 
                     if len(player_name.strip()) == 0:
 
@@ -400,8 +390,6 @@ async def subscribe_to_game_events():
                         lobby_info[game_id]["players"].append(player_name)
 
                     lobby_info[game_id]["player count"] += 1
-
-                    print(lobby_info[game_id]["players"])
 
                     for guild_name, channel_id in CHANNEL_IDS.items():
                         guild = discord.utils.get(bot.guilds, name=guild_name)
@@ -604,9 +592,13 @@ async def subscribe_to_game_events():
 @tasks.loop(minutes=5)
 async def websocket_restarter():
     """In the event that the 'subscribe_to_game_events()' method crashes, this method will restart everything"""
-    global websocket_live
+    global websocket_live, lobby_info
 
     if not websocket_live:
+
+        # Reset lobby info back to nothing to prevent dead hosts from showing up
+
+        lobby_info = {}
 
         for guild_name, channel_id in CHANNEL_IDS.items():
             guild = discord.utils.get(bot.guilds, name=guild_name)
@@ -638,14 +630,7 @@ async def websocket_restarter():
 
                 for player in game["players"]:
 
-                    try:
-
-                        player_name = bytes(id_and_name_converter(player["user_id"], "name"), 'utf-8').decode(
-                            'unicode_escape')
-
-                    except UnicodeDecodeError:
-
-                        player_name = id_and_name_converter(player["user_id"], "name")
+                    player_name = id_and_name_converter(player["user_id"], "name")
 
                     if len(player_name.strip()) == 0:
 
